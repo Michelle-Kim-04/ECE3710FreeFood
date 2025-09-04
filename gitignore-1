@@ -1,0 +1,10 @@
+work
+db
+incremental_db
+output_files
+simulation
+c5_pin_model_dump.txt
+*.qpf
+*.qsf
+*.qws
+*.pdf
