@@ -2,10 +2,10 @@
 `default_nettype none
 
 module top (
-    input  wire [9:0] SW,        // 10 bottom
-    input  wire [1:0] KEY,       // 2 key
-    input  wire       CLOCK_50,  // 50 MHz 
-    output wire [9:0] LEDR,      // low 10 case
+    input  wire [9:0] SW,        // SW9..7: opcode, SW6: sign bit, SW5..0: input magnitude
+    input  wire [1:0] KEY,       // Keys (unused)
+    input  wire       CLOCK_50,  // 50 MHz clock (unused)
+    output wire [9:0] LEDR,      // LEDR[4:0] = flags {C,F,Z,L,N}
     output wire [6:0] HEX0,      // y[3:0]
     output wire [6:0] HEX1,      // y[7:4]
     output wire [6:0] HEX2,      // y[11:8]
@@ -13,27 +13,30 @@ module top (
 );
 
     // =============================
-    // Setup Inputs
+    // Input mapping
     // =============================
     wire [15:0] a, b;
     wire [4:0]  alu_op;
 
-    // a = SW3..0 (4 input，scale 0–15)
-    assign a = {12'b0, SW[3:0]};
+    // Input A: SW6..0 interpreted as signed number (-64 ~ +63)
+    assign a = {{9{SW[6]}}, SW[6:0]};
 
-    // b = SW7..4 (4 input，scale 0–15)
-    assign b = {12'b0, SW[7:4]};
+    // Input B: constant 16
+    assign b = 16'd16;
 
-    // alu_op = SW9..8 (2 choose)
-    // 00 -> ADD, 01 -> SUB, 10 -> AND, 11 -> OR
-    assign alu_op = (SW[9:8] == 2'b00) ? 5'd0   : // ADD
-                    (SW[9:8] == 2'b01) ? 5'd8   : // SUB
-                    (SW[9:8] == 2'b10) ? 5'd14  : // AND
-                    (SW[9:8] == 2'b11) ? 5'd16  : // OR
+    // ALU opcode = SW9..7 (3-bit → 8 functions)
+    assign alu_op = (SW[9:7] == 3'b000) ? 5'd0   : // ADD
+                    (SW[9:7] == 3'b001) ? 5'd8   : // SUB
+                    (SW[9:7] == 3'b010) ? 5'd14  : // AND
+                    (SW[9:7] == 3'b011) ? 5'd16  : // OR
+                    (SW[9:7] == 3'b100) ? 5'd18  : // XOR
+                    (SW[9:7] == 3'b101) ? 5'd20  : // NOT
+                    (SW[9:7] == 3'b110) ? 5'd21  : // LSH
+                    (SW[9:7] == 3'b111) ? 5'd23  : // RSH
                     5'd0;
 
     // =============================
-    // ALU output
+    // ALU instance
     // =============================
     wire [15:0] y;
     wire        y_valid;
@@ -44,7 +47,7 @@ module top (
         .a(a),
         .b(b),
         .alu_op(alu_op),
-        .shamt(5'd1),        
+        .shamt(5'd1),
         .psr_c_in(1'b0),
         .flags_en(1'b1),
         .flags_sel(5'b11111),
@@ -55,10 +58,16 @@ module top (
     );
 
     // =============================
-    // Output of ALU
+    // Outputs
     // =============================
-    assign LEDR = y[9:0];  
 
+    // Flags on LEDR[4:0]
+    assign LEDR[4:0] = flags_raw;
+
+    // LEDR[9:5] unused
+    assign LEDR[9:5] = 5'b0;
+
+    // Display y on HEX0..HEX3
     hex7seg h0(.bin(y[3:0]),   .seg(HEX0));
     hex7seg h1(.bin(y[7:4]),   .seg(HEX1));
     hex7seg h2(.bin(y[11:8]),  .seg(HEX2));
@@ -68,7 +77,7 @@ endmodule
 
 
 // =============================
-// 7 Segment module
+// Seven-segment decoder
 // =============================
 module hex7seg (
     input  wire [3:0] bin,
@@ -98,4 +107,3 @@ module hex7seg (
 endmodule
 
 `default_nettype wire
-
