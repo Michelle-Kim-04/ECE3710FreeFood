@@ -73,21 +73,23 @@ module alu16 #(
 
       // ====== ADD family ======
 		
-		OP_ADD, OP_ADDI, OP_ADDU, OP_ADDUI: begin
+		OP_ADD, OP_ADDI,: begin
 		  result = add_base[WIDTH-1:0];
-		  c = 0; // Ignore carry for signed inputs
+        c = add_carry;
         f = add_overflow;
         z = (result == 0);
-        l = 0;
         n = ($signed(result) < 0);
       end
+
+    OP_ADDU, OP_ADDUI: begin
+      result = add[WIDTH-1:0];
+    end
 
       OP_ADDC, OP_ADDCI, OP_ADDCU, OP_ADDCUI: begin
         result = addc_ext[WIDTH-1:0];
         c = addc_carry; 
         f = addc_overflow;
         z = (result == 0);
-        l = 0;
         n = ($signed(result) < 0);
       end
 
@@ -97,7 +99,6 @@ module alu16 #(
         c = 0; // disable borrow in signed mode
         f = sub_overflow;
         z = (result == {WIDTH{1'b0}});
-        l = ($signed(a) < $signed(b)); // use signed comparison
         n = ($signed(result) < 0);
       end
 
