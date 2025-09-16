@@ -68,4 +68,82 @@ module registerBank16 (
 
 endmodule
 
+// =======================================
+// MUX A & B for ALU integration
+// =======================================
+module ALUMux16(
+
+    // NOTE ON RESERVED REGISTERS
+    // CR16 reserves registers 13, 14, and 15 for PC, ISP, and INTBASE respectively
+    // As such, I've disallowed using them in the MUXs for the ALU
+
+    input wire [15:0] r0,
+    input wire [15:0] r1,
+    input wire [15:0] r2,
+    input wire [15:0] r3,
+    input wire [15:0] r4,
+    input wire [15:0] r5,
+    input wire [15:0] r6,
+    input wire [15:0] r7,
+    input wire [15:0] r8,
+    input wire [15:0] r9,
+    input wire [15:0] r10,
+    input wire [15:0] r11,
+    input wire [15:0] r12,
+    input wire [4:0] select,
+    input wire clk,
+    output reg [15:0] muxOut;
+);
+
+    always@(posedge clk) {
+
+        // Assign the MUX's output to whichever register(input) is selected by the select wire (opcode 0000 to 1100)
+        case(select)
+            4'd0: begin
+                muxOut = r0;
+            end
+            4'd1: begin
+                muxOut = r1;
+            end
+            4'd2: begin
+                muxOut = r2;
+            end
+            4'd3: begin
+                muxOut = r3;
+            end
+            4'd4: begin
+                muxOut = r4;
+            end
+            4'd5: begin
+                muxOut = r5;
+            end
+            4'd6: begin
+                muxOut = r6;
+            end
+            4'd7: begin
+                muxOut = r7;
+            end
+            4'd8: begin
+                muxOut = r8;
+            end
+            4'd9: begin
+                muxOut = r9;
+            end
+            4'd10: begin
+                muxOut = r10;
+            end
+            4'd11: begin
+                muxOut = r11;
+            end
+            4'd12: begin
+                muxOut = r12;
+            end
+
+        endcase
+    }
+
+
+
+endmodule
+
 `default_nettype wire
