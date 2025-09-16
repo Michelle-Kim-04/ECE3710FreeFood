@@ -72,123 +72,120 @@ module alu16 #(
     case (alu_op)
 
       // ====== ADD family ======
-		
-		OP_ADD, OP_ADDI,: begin
-		  result = add_base[WIDTH-1:0];
+      OP_ADD, OP_ADDI: begin
+        result = add_base[WIDTH-1:0];
         c = add_carry;
         f = add_overflow;
         z = (result == 0);
         n = ($signed(result) < 0);
       end
 
-    OP_ADDU, OP_ADDUI: begin
-      result = add[WIDTH-1:0];
-    end
+      OP_ADDU, OP_ADDUI: begin
+        result = add_base[WIDTH-1:0];
+        // unsigned add: no c/f
+        z = (result == 0);
+        n = ($signed(result) < 0);
+      end
 
-      OP_ADDC, OP_ADDCI, OP_ADDCU, OP_ADDCUI: begin
+      // ====== ADDC family ======
+      OP_ADDC, OP_ADDCI: begin
         result = addc_ext[WIDTH-1:0];
-        c = addc_carry; 
+        c = addc_carry;
         f = addc_overflow;
         z = (result == 0);
         n = ($signed(result) < 0);
       end
 
-      // ====== SUB / CMP family ======
-      OP_SUB, OP_SUBI: begin
-        result = sub_ext[WIDTH-1:0];
-        c = 0; // disable borrow in signed mode
-        f = sub_overflow;
-        z = (result == {WIDTH{1'b0}});
+      OP_ADDCU, OP_ADDCUI: begin
+        result = addc_ext[WIDTH-1:0];
+        // unsigned add with carry: ignore c/f
+        z = (result == 0);
         n = ($signed(result) < 0);
       end
 
-      OP_CMP, OP_CMPI, OP_CMPU, OP_CMPUI: begin
-        result    = sub_ext[WIDTH-1:0];
-        res_valid = 1'b0;
-        c = sub_borrow;
+      // ====== SUB family ======
+      OP_SUB, OP_SUBI: begin
+        result = sub_ext[WIDTH-1:0];
+        c = 0; // do not use borrow for signed
         f = sub_overflow;
-        z = cmp_eq;
-        l = cmp_l_unsigned;
-        n = cmp_l_signed;
+        z = (result == 0);
+        n = ($signed(result) < 0);
+      end
+
+      // ====== CMP family ======
+      OP_CMP, OP_CMPI, OP_CMPU, OP_CMPUI: begin
+        result    = {WIDTH{1'b0}}; // no output
+        res_valid = 1'b0;          // no writeback
+        c = 0;                     // CMP does not set carry
+        f = 0;                     // CMP does not set overflow
+        z = cmp_eq;                // Z = equality
+        l = cmp_l_unsigned;        // L = unsigned less
+        n = cmp_l_signed;          // N = signed less
       end
 
       // ====== Logic ======
       OP_AND, OP_ANDI: begin
         result = a & b;
-        c=0; f=0; l=0;
         z = (result == 0);
         n = ($signed(result) < 0);
       end
       OP_OR, OP_ORI: begin
         result = a | b;
-        c=0; f=0; l=0;
         z = (result == 0);
         n = ($signed(result) < 0);
       end
       OP_XOR, OP_XORI: begin
         result = a ^ b;
-        c=0; f=0; l=0;
         z = (result == 0);
         n = ($signed(result) < 0);
       end
       OP_NOT: begin
         result = ~a;
-        c=0; f=0; l=0;
         z = (result == 0);
         n = ($signed(result) < 0);
       end
 
       // ====== Shifts ======
       OP_LSH, OP_LSHI: begin
-        if (!s_shamt[4]) result = a << s_shamt;
-        else             result = a >> eff_mag;
-        c=0; f=0; l=0;
+        result = a << eff_mag;
         z = (result == 0);
         n = ($signed(result) < 0);
       end
       OP_RSH, OP_RSHI: begin
-        result = a >> eff_mag;
-        c=0; f=0; l=0;
+        result = a >> eff_mag; // logical shift
         z = (result == 0);
         n = ($signed(result) < 0);
       end
       OP_ARSH: begin
-        if (!s_shamt[4]) result = $signed(a) >>> s_shamt;
-        else             result = a << eff_mag;
-        c=0; f=0; l=0;
+        result = $signed(a) >>> eff_mag; // arithmetic shift
         z = (result == 0);
         n = ($signed(result) < 0);
       end
       OP_ALSH: begin
         result = a << eff_mag;
-        c=0; f=0; l=0;
         z = (result == 0);
         n = ($signed(result) < 0);
       end
 
       // ====== Data move / misc ======
       OP_MOV: begin
-        result = b; 
-        c=0; f=0; l=0;
+        result = b;
         z = (result == 0);
         n = ($signed(result) < 0);
       end
       OP_LUI: begin
         result = {b[7:0], 8'h00};
-        c=0; f=0; l=0;
         z = (result == 0);
         n = ($signed(result) < 0);
       end
       OP_NOP: begin
-        result = a; 
-        c=0; f=0; l=0;
+        result = a;
         z = (result == 0);
         n = ($signed(result) < 0);
       end
       OP_WAIT: begin
         result    = a;
         res_valid = 1'b0;
-        c=0; f=0; l=0;
         z = (result == 0);
         n = ($signed(result) < 0);
       end
@@ -196,7 +193,6 @@ module alu16 #(
       default: begin
         result    = {WIDTH{1'b0}};
         res_valid = 1'b1;
-        c=0; f=0; z=0; l=0; n=0;
       end
     endcase
   end
