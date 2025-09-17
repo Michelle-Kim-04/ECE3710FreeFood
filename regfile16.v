@@ -68,15 +68,16 @@ module registerBank16 (
 
 endmodule
 
+
 // =======================================
 // MUX A & B for ALU integration
 // =======================================
 module ALUMux16(
 
-    // NOTE ON RESERVED REGISTERS
+	 // NOTE ON RESERVED REGISTERS
     // CR16 reserves registers 13, 14, and 15 for PC, ISP, and INTBASE respectively
     // As such, I've disallowed using them in the MUXs for the ALU
-
+	 
     input wire [15:0] r0,
     input wire [15:0] r1,
     input wire [15:0] r2,
@@ -90,59 +91,28 @@ module ALUMux16(
     input wire [15:0] r10,
     input wire [15:0] r11,
     input wire [15:0] r12,
-    input wire [4:0] select,
-    input wire clk,
-    output reg [15:0] muxOut;
+    input wire [4:0]  select,
+    input wire        clk,
+    output reg [15:0] muxOut
 );
 
-    always@(posedge clk) {
-
-        // Assign the MUX's output to whichever register(input) is selected by the select wire (opcode 0000 to 1100)
+    always @(posedge clk) begin
         case(select)
-            4'd0: begin
-                muxOut = r0;
-            end
-            4'd1: begin
-                muxOut = r1;
-            end
-            4'd2: begin
-                muxOut = r2;
-            end
-            4'd3: begin
-                muxOut = r3;
-            end
-            4'd4: begin
-                muxOut = r4;
-            end
-            4'd5: begin
-                muxOut = r5;
-            end
-            4'd6: begin
-                muxOut = r6;
-            end
-            4'd7: begin
-                muxOut = r7;
-            end
-            4'd8: begin
-                muxOut = r8;
-            end
-            4'd9: begin
-                muxOut = r9;
-            end
-            4'd10: begin
-                muxOut = r10;
-            end
-            4'd11: begin
-                muxOut = r11;
-            end
-            4'd12: begin
-                muxOut = r12;
-            end
-
+            5'd0:  muxOut <= r0;
+            5'd1:  muxOut <= r1;
+            5'd2:  muxOut <= r2;
+            5'd3:  muxOut <= r3;
+            5'd4:  muxOut <= r4;
+            5'd5:  muxOut <= r5;
+            5'd6:  muxOut <= r6;
+            5'd7:  muxOut <= r7;
+            5'd8:  muxOut <= r8;
+            5'd9:  muxOut <= r9;
+            5'd10: muxOut <= r10;
+            5'd11: muxOut <= r11;
+            5'd12: muxOut <= r12;              
         endcase
-    }
-
-
+    end
 
 endmodule
 
