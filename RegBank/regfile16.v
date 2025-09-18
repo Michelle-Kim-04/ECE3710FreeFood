@@ -1,6 +1,8 @@
 `timescale 1ns / 1ps
 `default_nettype none
 
+// Potentially Deprecated - do not use (for now)
+
 // =======================================
 // 16-bit Register
 // =======================================
