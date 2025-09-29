@@ -1,0 +1,18 @@
+WIDTH=16;
+DEPTH=512;
+
+ADDRESS_RADIX=HEX;
+DATA_RADIX=HEX;
+
+CONTENT BEGIN
+  000 : 0000;
+  001 : 0000;
+  002 : 0000;
+
+  1FC : 00AA;   -- 508
+  1FD : 00BB;   -- 509
+  1FE : 00CC;   -- 510
+  1FF : 00DD;   -- 511
+
+  [003..1FB] : 0000;
+END;
