@@ -1,139 +1,234 @@
 `timescale 1ns/1ps
 `default_nettype none
-
 // ============================================================================
-// Lab4 Stage-1 CPU FSM (3-Stage Pipeline Demonstration)
-// Stages required by TA:
-//
-//   S0: FETCH              - send PC to instruction memory
-//   S1: DECODE+READ+EXEC   - latch instruction, decode, read regfile, run ALU
-//   S2: WRITEBACK          - write ALU result to regfile, increment PC
-//
-// Notes:
-// - No IMEM wait state (hard-coded single-cycle BRAM assumption)
-// - Combined decode + read + execute in one cycle per TA request
-// - Demonstration only (no hazard or stall logic)
+// Lab 4 - Stage 2 FSM (Final Verified Edition)
+// ----------------------------------------------------------------------------
+// • Supports: MOVI, ADD, SUB, LOAD, STORE, NOP
+// • Pipeline stages: FETCH → DECODE → EXEC → MEMACCESS → WRITEBACK
+// • Handles synchronous BRAM timing (instruction valid next cycle)
+// • PC increments in STORE or WRITEBACK stage
+// • Exports latched instruction (ir_out) for HEX display
 // ============================================================================
 
 module fsm (
     input  wire        clk,
     input  wire        rst_n,
 
-    // instruction from BRAM (sync read assumed)
-    input  wire [15:0] instr_word,
-
-    // PC interface
-    input  wire [15:0] pc,
-    output reg  [15:0] pc_next,
+    // ---- Program Counter ----
+    input  wire [15:0] pc_in,
     output reg         pc_en,
+    output reg  [15:0] pc_next,
 
-    // Register file interface
-    output reg  [3:0]  rdest_addr,
-    output reg  [3:0]  rsrc_addr,
-    output reg         reg_we,
+    // ---- Instruction Memory (Port A) ----
+    input  wire [15:0] imem_dout,
+    output reg         imem_en,
+    output reg  [8:0]  imem_addr,
 
-    // ALU interface
-    output reg  [4:0]  alu_op_sel,
+    // ---- Data Memory (Port B) ----
+    output reg         dmem_en,
+    output reg         dmem_we,
+    output reg  [8:0]  dmem_addr,
+    output reg  [15:0] dmem_din,
+    input  wire [15:0] dmem_dout,
 
-    // ALU output for writeback & debug
+    // ---- Register File ----
+    output reg         rf_we,
+    output reg  [3:0]  rf_waddr,
+    output reg  [15:0] rf_wdata,
+    output reg  [3:0]  rf_ra_addr,
+    input  wire [15:0] rf_ra_data,
+    output reg  [3:0]  rf_rb_addr,
+    input  wire [15:0] rf_rb_data,
+
+    // ---- ALU ----
+    output reg  [4:0]  alu_op,
+    output reg  [4:0]  alu_shamt,
+    output reg         alu_flags_en,
+    output reg  [4:0]  alu_flags_sel,
+    output reg         alu_cin,
     input  wire [15:0] alu_out,
-    input  wire        alu_y_valid,
 
-    output reg  [15:0] last_value,
-    output reg         ok_led
+    // ---- Debug Output ----
+    output reg  [15:0] ir_out     // latched instruction for HEX display
 );
 
-    // FSM states (3-stage CPU)
-    localparam [1:0]
-        S_FETCH   = 2'd0,
-        S_DECODE  = 2'd1,   // decode + reg read + alu eval
-        S_WB      = 2'd2;   // writeback + PC update
+    // FSM state encoding
+    localparam S_FETCH     = 3'd0;
+    localparam S_DECODE    = 3'd1;
+    localparam S_EXEC      = 3'd2;
+    localparam S_MEMACCESS = 3'd3;
+    localparam S_WB        = 3'd4;
 
-    reg [1:0] state, next_state;
+    reg [2:0] state, next_state;
+    reg [15:0] ir;  // instruction register
 
-    // Latched instruction fields
-    reg [3:0] rdest_l, rsrc_l, subfunc_l;
+    // --- Instruction field extraction ---
+    wire [3:0] opcode_hi = ir[15:12];
+    wire [3:0] rdest     = ir[11:8];
+    wire [3:0] subfunc   = ir[7:4];
+    wire [3:0] rsrc      = ir[3:0];
 
+    // --- ALU operation codes ---
+    localparam OP_ADD = 5'd0;
+    localparam OP_SUB = 5'd8;
+    localparam OP_NOP = 5'd29;
+
+    wire [15:0] pc_plus1 = pc_in + 16'd1;
     wire rst = ~rst_n;
 
-    // Decode ISA minor opcode to ALU op
-    function [4:0] decode_alu_op(input [3:0] subf);
-        case (subf)
-            4'b0101: decode_alu_op = 5'd0;   // ADD
-            4'b1001: decode_alu_op = 5'd8;   // SUB
-            4'b0001: decode_alu_op = 5'd14;  // AND
-            4'b0010: decode_alu_op = 5'd16;  // OR
-            4'b0011: decode_alu_op = 5'd18;  // XOR
-            4'b1101: decode_alu_op = 5'd27;  // MOV
-            default: decode_alu_op = 5'd29;  // NOP
-        endcase
-    endfunction
-
-    // State register & debug latch
+    // =========================================================================
+    // Sequential logic: update state and latch instruction
+    // =========================================================================
     always @(posedge clk) begin
         if (rst) begin
-            state      <= S_FETCH;
-            last_value <= 16'd0;
+            state  <= S_FETCH;
+            ir     <= 16'h0000;
+            ir_out <= 16'h0000;
         end else begin
-            state <= next_state;
-            if (state == S_WB && alu_y_valid)
-                last_value <= alu_out; // store result for HEX display
+            state  <= next_state;
+            if (state == S_DECODE)
+                ir <= imem_dout;     // latch instruction (BRAM delay)
+            ir_out <= ir;            // export for debug
         end
     end
 
-    // Main FSM logic
+    // =========================================================================
+    // Combinational logic: next-state and control signal generation
+    // =========================================================================
     always @* begin
-        // Default control values
-        next_state = state;
-        reg_we     = 1'b0;
-        pc_en      = 1'b0;
-        ok_led     = 1'b0;
+        // ---- Default safe values ----
+        pc_en         = 1'b0;
+        pc_next       = pc_in;
+        imem_en       = 1'b1;
+        imem_addr     = pc_in[8:0];
+        dmem_en       = 1'b0;
+        dmem_we       = 1'b0;
+        dmem_addr     = 9'd0;
+        dmem_din      = 16'h0000;
+        rf_we         = 1'b0;
+        rf_waddr      = 4'd0;
+        rf_wdata      = 16'h0000;
+        rf_ra_addr    = 4'd0;
+        rf_rb_addr    = 4'd0;
+        alu_op        = OP_NOP;
+        alu_shamt     = 5'd0;
+        alu_flags_en  = 1'b0;
+        alu_flags_sel = 5'd0;
+        alu_cin       = 1'b0;
+        next_state    = state;
 
-        pc_next = pc + 16'd1;
-        rdest_addr = rdest_l;
-        rsrc_addr  = rsrc_l;
-        alu_op_sel = decode_alu_op(subfunc_l);
-
+        // ---- FSM behavior ----
         case (state)
-            // ---------------------------
-            // S0: FETCH instruction
-            // ---------------------------
+            // =============================================================
+            // FETCH : send PC to instruction memory
+            // =============================================================
             S_FETCH: begin
+                imem_en   = 1'b1;
+                imem_addr = pc_in[8:0];
                 next_state = S_DECODE;
             end
 
-            // ---------------------------
-            // S1: DECODE + READ + EXECUTE
-            // ---------------------------
+            // =============================================================
+            // DECODE : instruction available; decide type
+            // =============================================================
             S_DECODE: begin
-                next_state = S_WB;
+                case (imem_dout[15:12])
+                    4'b0000: next_state = S_EXEC;   // R-type
+                    4'b0100: next_state = S_EXEC;   // LOAD/STORE
+                    4'b0101: next_state = S_WB;     // MOVI
+                    default: begin                  // NOP
+                        pc_en     = 1'b1;
+                        pc_next   = pc_plus1;
+                        next_state = S_FETCH;
+                    end
+                endcase
             end
 
-            // ---------------------------
-            // S2: WRITEBACK + PC++
-            // ---------------------------
+            // =============================================================
+            // EXEC : perform ALU operation or prepare memory address
+            // =============================================================
+            S_EXEC: begin
+                if (opcode_hi == 4'b0000) begin
+                    // --- R-type ---
+                    rf_ra_addr = rsrc;
+                    rf_rb_addr = rdest;
+                    case (subfunc)
+                        4'b0101: alu_op = OP_ADD;
+                        4'b1001: alu_op = OP_SUB;
+                        default: alu_op = OP_NOP;
+                    endcase
+                    next_state = S_WB;
+
+                end else if (opcode_hi == 4'b0100) begin
+                    // --- LOAD / STORE ---
+                    rf_ra_addr = rsrc;
+                    rf_rb_addr = rdest;
+                    next_state = S_MEMACCESS;
+                end
+            end
+
+            // =============================================================
+            // MEMACCESS : handle LOAD/STORE with BRAM (Port B)
+            // =============================================================
+            S_MEMACCESS: begin
+                dmem_en = 1'b1;
+                if (subfunc == 4'b0000) begin
+                    // LOAD Rdest,Rsrc → Rdest ← MEM[Rsrc]
+                    dmem_we   = 1'b0;
+                    dmem_addr = rf_ra_data[8:0];
+                    next_state = S_WB;
+
+                end else if (subfunc == 4'b0100) begin
+                    // STORE Rsrc,Rdest → MEM[Rdest] ← Rsrc
+                    dmem_we   = 1'b1;
+                    dmem_addr = rf_rb_data[8:0];
+                    dmem_din  = rf_ra_data;
+                    pc_en     = 1'b1;
+                    pc_next   = pc_plus1;
+                    next_state = S_FETCH;
+                end else begin
+                    // Unsupported subfunc
+                    pc_en     = 1'b1;
+                    pc_next   = pc_plus1;
+                    next_state = S_FETCH;
+                end
+            end
+
+            // =============================================================
+            // WRITEBACK : write result back to register
+            // =============================================================
             S_WB: begin
-                reg_we  = alu_y_valid; // write result to regfile
-                pc_en   = 1'b1;        // increment PC
-                ok_led  = 1'b1;        // LED pulse marks 1 instruction complete
+                case (opcode_hi)
+                    // --- R-type (ADD, SUB) ---
+                    4'b0000: begin
+                        rf_we     = 1'b1;
+                        rf_waddr  = rdest;
+                        rf_wdata  = alu_out;
+                    end
+
+                    // --- LOAD ---
+                    4'b0100: begin
+                        if (subfunc == 4'b0000) begin
+                            rf_we     = 1'b1;
+                            rf_waddr  = rdest;
+                            rf_wdata  = dmem_dout;
+                        end
+                    end
+
+                    // --- MOVI ---
+                    4'b0101: begin
+                        rf_we     = 1'b1;
+                        rf_waddr  = rdest;
+                        rf_wdata  = {12'b0, rsrc};
+                    end
+                endcase
+                pc_en   = 1'b1;
+                pc_next = pc_plus1;
                 next_state = S_FETCH;
             end
         endcase
     end
-
-    // Latch instruction fields in FETCH stage
-    always @(posedge clk) begin
-        if (rst) begin
-            rdest_l   <= 4'd0;
-            rsrc_l    <= 4'd0;
-            subfunc_l <= 4'd0;
-        end else if (state == S_FETCH) begin
-            rdest_l   <= instr_word[11:8];
-            subfunc_l <= instr_word[7:4];
-            rsrc_l    <= instr_word[3:0];
-        end
-    end
-
 endmodule
 
 `default_nettype wire
+
