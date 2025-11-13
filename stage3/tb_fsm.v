@@ -7,8 +7,6 @@ module tb_fsm;
     // Testbench-driven signals
     reg        CLOCK_50;
     reg [3:0]  KEY;
-    wire [6:0] HEX0, HEX1, HEX2, HEX3;
-    wire [9:0] LEDR;
 
     // ------------------------------------------------------------------------
     // Reset and Display Mode
@@ -161,7 +159,7 @@ module tb_fsm;
     );
 	
     // ------------------------------------------------------------------------
-    // Test Stimulus
+    // Adjusted Test Stimulus for Intel Questa
     // ------------------------------------------------------------------------
     initial begin
         // Initialize inputs
@@ -169,42 +167,54 @@ module tb_fsm;
         div = 24'd0;
 
         // Apply reset
+        $display("[INFO] Applying reset...");
         #5 KEY[0] = 1'b0; // Assert reset
         #20 KEY[0] = 1'b1; // Deassert reset
+        $display("[INFO] Reset deasserted.");
+
+        // Monitor FSM state and outputs
+        $monitor("[FSM] Time: %0t | State: %0d | PC: %h | IR: %h", $time, uut.state, pc, instr_word);
 
         // Test Program Counter (PC) Increment
         #100;
-        if (pc !== 16'h0001) $display("PC Increment Test Failed");
+        if (pc !== 16'h0001) $display("[ERROR] PC Increment Test Failed");
+        else $display("[PASS] PC Increment Test Passed");
 
         // Test Register-to-Register ADD Instruction
-        // Load values into registers
-        U_REG.ra_data = 16'h0003;
-        U_REG.rb_data = 16'h0004;
+        $display("[INFO] Testing ADD instruction...");
+        rf_ra_data = 16'h0003; // Directly drive the input
+        rf_rb_data = 16'h0004; // Directly drive the input
         #100;
-        if (rf_wdata !== 16'h0007) $display("ADD Instruction Test Failed");
+        if (rf_wdata !== 16'h0007) $display("[ERROR] ADD Instruction Test Failed");
+        else $display("[PASS] ADD Instruction Test Passed");
 
         // Test Load Instruction
-        // Simulate memory read
-        U_BRAM.dout_b = 16'h00FF;
+        $display("[INFO] Testing LOAD instruction...");
+        dmem_dout = 16'h00FF; // Directly drive the input
         #100;
-        if (rf_wdata !== 16'h00FF) $display("Load Instruction Test Failed");
+        if (rf_wdata !== 16'h00FF) $display("[ERROR] Load Instruction Test Failed");
+        else $display("[PASS] Load Instruction Test Passed");
 
         // Test Store Instruction
-        // Simulate memory write
+        $display("[INFO] Testing STORE instruction...");
         #100;
-        if (U_BRAM.din_b !== rf_ra_data) $display("Store Instruction Test Failed");
+        if (dmem_din !== rf_ra_data) $display("[ERROR] Store Instruction Test Failed");
+        else $display("[PASS] Store Instruction Test Passed");
 
         // Test Jump Instruction
-        // Simulate jump
+        $display("[INFO] Testing JUMP instruction...");
         #100;
-        if (pc !== 16'h000A) $display("Jump Instruction Test Failed");
+        if (pc !== 16'h000A) $display("[ERROR] Jump Instruction Test Failed");
+        else $display("[PASS] Jump Instruction Test Passed");
 
         // Test Branch Instruction
-        // Simulate branch taken
+        $display("[INFO] Testing BRANCH instruction...");
         #100;
-        if (pc !== 16'h0005) $display("Branch Instruction Test Failed");
+        if (pc !== 16'h0005) $display("[ERROR] Branch Instruction Test Failed");
+        else $display("[PASS] Branch Instruction Test Passed");
 
         // End simulation
+        $display("[INFO] Simulation complete.");
         $stop;
     end
 	 
