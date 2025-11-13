@@ -159,75 +159,53 @@ module tb_fsm;
         // Debug
         .ir_out(instr_word)
     );
-	 
-	// ------------------------------------------------------------------------
-    // Test procedure 
-    // - preload BRAM data via hierarchical access
-    // - load mem -> regfile, perform ALU ops, store/reload, compare, branch
+	
+    // ------------------------------------------------------------------------
+    // Test Stimulus
     // ------------------------------------------------------------------------
     initial begin
-        // initialize
-        KEY = 4'b1111;
-        // apply reset (KEY[0] active-low)
-        KEY[0] = 1'b0; KEY[1] = 1'b1; // assert reset
+        // Initialize inputs
+        KEY = 4'b1111; // All keys released (reset inactive)
+        div = 24'd0;
+
+        // Apply reset
+        #5 KEY[0] = 1'b0; // Assert reset
+        #20 KEY[0] = 1'b1; // Deassert reset
+
+        // Test Program Counter (PC) Increment
         #100;
-        KEY[0] = 1'b1; // release reset
+        if (pc !== 16'h0001) $display("PC Increment Test Failed");
+
+        // Test Register-to-Register ADD Instruction
+        // Load values into registers
+        U_REG.ra_data = 16'h0003;
+        U_REG.rb_data = 16'h0004;
         #100;
+        if (rf_wdata !== 16'h0007) $display("ADD Instruction Test Failed");
 
-        $display("--- Starting FSM test sequence ---");
+        // Test Load Instruction
+        // Simulate memory read
+        U_BRAM.dout_b = 16'h00FF;
+        #100;
+        if (rf_wdata !== 16'h00FF) $display("Load Instruction Test Failed");
 
-        // Preload some data in data memory (hierarchical access to U_BRAM.mem)
-        U_BRAM.mem[9'd100] = 16'd5;   // data A
-        U_BRAM.mem[9'd101] = 16'd7;   // data B
-        $display("Preloaded Mem[100]=%0d Mem[101]=%0d", U_BRAM.mem[100], U_BRAM.mem[101]);
+        // Test Store Instruction
+        // Simulate memory write
+        #100;
+        if (U_BRAM.din_b !== rf_ra_data) $display("Store Instruction Test Failed");
 
-        // Wait a couple slow clock cycles so everything is stable
-        repeat (3) @(posedge slow_clk);
+        // Test Jump Instruction
+        // Simulate jump
+        #100;
+        if (pc !== 16'h000A) $display("Jump Instruction Test Failed");
 
-        // 1) Load data from memory into the regfile (simulate a LOAD sequence)
-        U_REG.regs[4'd1] = U_BRAM.mem[9'd100];
-        U_REG.regs[4'd2] = U_BRAM.mem[9'd101];
-        $display("Loaded R1=%0d R2=%0d", U_REG.regs[1], U_REG.regs[2]);
-        @(posedge slow_clk);
+        // Test Branch Instruction
+        // Simulate branch taken
+        #100;
+        if (pc !== 16'h0005) $display("Branch Instruction Test Failed");
 
-        // 2) Perform arithmetic: R3 = R1 + R2 (set flags implicitly by computing)
-        U_REG.regs[4'd3] = U_REG.regs[4'd1] + U_REG.regs[4'd2];
-        $display("Computed R3 = R1 + R2 = %0d", U_REG.regs[3]);
-        @(posedge slow_clk);
-
-        // 3) Store the result in memory: Mem[200] = R3
-        U_BRAM.mem[9'd200] = U_REG.regs[4'd3];
-        $display("Stored Mem[200]=%0d", U_BRAM.mem[200]);
-        @(posedge slow_clk);
-
-        // 4) Reload the result from memory into R4
-        U_REG.regs[4'd4] = U_BRAM.mem[9'd200];
-        $display("Reloaded R4 = %0d", U_REG.regs[4]);
-        @(posedge slow_clk);
-
-        // 5) Perform arithmetic to set flags: compare R4 with immediate 12
-        integer signed_diff;
-        reg z_flag;
-        signed_diff = $signed(U_REG.regs[4]) - $signed(16'd12);
-        z_flag = (signed_diff == 0);
-        $display("Compare R4(%0d) - 12 = %0d  Z=%b", U_REG.regs[4], signed_diff, z_flag);
-        @(posedge slow_clk);
-
-        // 6) Use flags to do a branch: if equal (Z==1) then write R4 into Mem[201]
-        if (z_flag) begin
-            U_BRAM.mem[9'd201] = U_REG.regs[4'd4];
-            $display("Branch taken: wrote Mem[201]=%0d", U_BRAM.mem[201]);
-        end else begin
-            $display("Branch not taken: Mem[201] unchanged (was %0d)", U_BRAM.mem[201]);
-        end
-
-        @(posedge slow_clk);
-
-        // 7) Final write verification
-        $display("Final: Mem[200]=%0d Mem[201]=%0d", U_BRAM.mem[200], U_BRAM.mem[201]);
-
-        $display("--- Test sequence complete ---");
-        #1000 $stop;
+        // End simulation
+        $stop;
     end
 	 
 	 
