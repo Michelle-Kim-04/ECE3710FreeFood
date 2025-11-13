@@ -1,0 +1,15 @@
+WIDTH=16;
+DEPTH=512;
+
+ADDRESS_RADIX=UNS;
+DATA_RADIX=HEX;
+
+CONTENT BEGIN
+    0 : D101;   -- MOVI #0001 -> R1  (R1 = 1)
+    1 : D202;   -- MOVI #0002 -> R2  (R2 = 2)
+    2 : 0051;   -- ADD R1,R1  (0000 0001 0101 0001)
+    3 : 4122;   -- STOR R1,R2  (MEM[R2] = R1)
+    4 : 4032;   -- LOAD R3,R2  (R3 = MEM[R2])
+    5 : 0093;   -- ADD R3,R3   (0000 0011 0101 0011)
+    [6..511] : 0000;
+END;
