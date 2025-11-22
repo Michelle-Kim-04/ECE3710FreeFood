@@ -1,12 +1,20 @@
 `timescale 1ns/1ps
 `default_nettype none
-// Test bench
+// ============================================================================
+// top4.v : Lab4 Stage-3 Top-Level CPU (Branch + Jump + Mem Display)
+// ----------------------------------------------------------------------------
+// • KEY0 = reset
+// • KEY1 = show memory mode (HEX shows dmem_dout)
+// • Normal mode: HEX shows rf_wdata (write-back value)
+// • LEDR[9] heartbeat, LEDR[8:1] PC, LEDR[0] rf_we
+// ============================================================================
 
-module tb_fsm;
-
-    // Testbench-driven signals
-    reg        CLOCK_50;
-    reg [3:0]  KEY;
+module top4 (
+    input  wire        CLOCK_50,
+    input  wire [3:0]  KEY,
+    output wire [6:0]  HEX0, HEX1, HEX2, HEX3,
+    output wire [9:0]  LEDR
+);
 
     // ------------------------------------------------------------------------
     // Reset and Display Mode
@@ -21,12 +29,6 @@ module tb_fsm;
     reg [23:0] div;
     always @(posedge CLOCK_50) div <= div + 1;
     wire slow_clk = div[22];
-
-    // CLOCK_50 generator for simulation
-    initial begin
-        CLOCK_50 = 1'b0;
-    end
-    always #10 CLOCK_50 = ~CLOCK_50; // 50 MHz -> period 20ns
 
     // ------------------------------------------------------------------------
     // Program Counter
@@ -45,7 +47,7 @@ module tb_fsm;
     // ------------------------------------------------------------------------
     // Unified Dual-Port BRAM (Instruction + Data)
     // ------------------------------------------------------------------------
-    reg [15:0] imem_dout, dmem_dout, dmem_din;
+    wire [15:0] imem_dout, dmem_dout, dmem_din;
     wire [8:0]  imem_addr, dmem_addr;
     wire        dmem_en, dmem_we;
 
@@ -72,7 +74,7 @@ module tb_fsm;
     // ------------------------------------------------------------------------
     wire        rf_we;
     wire [3:0]  rf_waddr, rf_ra_addr, rf_rb_addr;
-    reg [15:0] rf_wdata, rf_ra_data, rf_rb_data;
+    wire [15:0] rf_wdata, rf_ra_data, rf_rb_data;
 
     regfile U_REG (
         .clk(slow_clk),
@@ -115,7 +117,7 @@ module tb_fsm;
     // ------------------------------------------------------------------------
     wire [15:0] instr_word;
 
-    fsm uut (
+    fsm U_FSM (
         .clk(slow_clk),
         .rst_n(rst_n),
 
@@ -157,72 +159,23 @@ module tb_fsm;
         // Debug
         .ir_out(instr_word)
     );
-	
+
     // ------------------------------------------------------------------------
-    // Adjusted Test Stimulus for Intel Questa
+    // Display Output
     // ------------------------------------------------------------------------
-    initial begin
-        // Initialize inputs
-        KEY = 4'b1111; // All keys released (reset inactive)
-        div = 24'd0;
+    wire [15:0] display_data = show_mem ? dmem_dout : rf_wdata;
 
-        // Apply reset
-        $display("[INFO] Applying reset...");
-        #5 KEY[0] = 1'b0; // Assert reset
-        #20 KEY[0] = 1'b1; // Deassert reset
-        $display("[INFO] Reset deasserted.");
+    sevenseg h0(.bin(display_data[3:0]),   .seg(HEX0));
+    sevenseg h1(.bin(display_data[7:4]),   .seg(HEX1));
+    sevenseg h2(.bin(display_data[11:8]),  .seg(HEX2));
+    sevenseg h3(.bin(display_data[15:12]), .seg(HEX3));
 
-        // Monitor FSM state and outputs
-        $monitor("[FSM] Time: %0t | State: %0d | PC: %h | IR: %h", $time, uut.state, pc, instr_word);
-
-        // Test Program Counter (PC) Increment
-        #100;
-        if (pc !== 16'h0001) $display("[ERROR] PC Increment Test Failed");
-        else $display("[PASS] PC Increment Test Passed");
-
-        // Test Register-to-Register ADD Instruction
-        $display("[INFO] Testing ADD instruction...");
-        rf_ra_data = 16'h0003; // Directly drive the input
-        rf_rb_data = 16'h0004; // Directly drive the input
-        #100;
-        if (rf_wdata !== 16'h0007) $display("[ERROR] ADD Instruction Test Failed");
-        else $display("[PASS] ADD Instruction Test Passed");
-
-        // Test Load Instruction
-        $display("[INFO] Testing LOAD instruction...");
-        dmem_dout = 16'h00FF; // Directly drive the input
-        #100;
-        if (rf_wdata !== 16'h00FF) $display("[ERROR] Load Instruction Test Failed");
-        else $display("[PASS] Load Instruction Test Passed");
-
-        // Test Store Instruction
-        $display("[INFO] Testing STORE instruction...");
-        #100;
-        if (dmem_din !== rf_ra_data) $display("[ERROR] Store Instruction Test Failed");
-        else $display("[PASS] Store Instruction Test Passed");
-
-        // Test Jump Instruction
-        $display("[INFO] Testing JUMP instruction...");
-        #100;
-        if (pc !== 16'h000A) $display("[ERROR] Jump Instruction Test Failed");
-        else $display("[PASS] Jump Instruction Test Passed");
-
-        // Test Branch Instruction
-        $display("[INFO] Testing BRANCH instruction...");
-        #100;
-        if (pc !== 16'h0005) $display("[ERROR] Branch Instruction Test Failed");
-        else $display("[PASS] Branch Instruction Test Passed");
-
-        // End simulation
-        $display("[INFO] Simulation complete.");
-        $stop;
-    end
-	 
-	 
-	 
-	 
-	 
-	 
+    // ------------------------------------------------------------------------
+    // LEDs
+    // ------------------------------------------------------------------------
+    assign LEDR[8:1] = pc[7:0];
+    assign LEDR[9]   = div[23]; // heartbeat
+    assign LEDR[0]   = rf_we;
 
 endmodule
 

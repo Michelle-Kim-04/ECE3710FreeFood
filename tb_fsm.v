@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 `default_nettype none
-// Test bench
+// Test bench NOTE: this is a complete testbench but does not work in questa yet.
 
 module tb_fsm;
 
@@ -45,7 +45,8 @@ module tb_fsm;
     // ------------------------------------------------------------------------
     // Unified Dual-Port BRAM (Instruction + Data)
     // ------------------------------------------------------------------------
-    reg [15:0] imem_dout, dmem_dout, dmem_din;
+    reg [15:0] dmem_dout;
+	 wire [15:0] imem_dout, dmem_din;
     wire [8:0]  imem_addr, dmem_addr;
     wire        dmem_en, dmem_we;
 
@@ -72,8 +73,9 @@ module tb_fsm;
     // ------------------------------------------------------------------------
     wire        rf_we;
     wire [3:0]  rf_waddr, rf_ra_addr, rf_rb_addr;
-    reg [15:0] rf_wdata, rf_ra_data, rf_rb_data;
-
+    reg [15:0] rf_ra_data, rf_rb_data;
+	 wire [15:0] rf_wdata;
+	 
     regfile U_REG (
         .clk(slow_clk),
         .rst(rst_sync),

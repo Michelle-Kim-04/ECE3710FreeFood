@@ -1,0 +1,88 @@
+WIDTH=16;
+DEPTH=512;
+
+ADDRESS_RADIX=UNS;
+DATA_RADIX=HEX;
+
+CONTENT BEGIN
+
+    -----------------------------------------------------------------
+    -- Stage 3 Test Program
+    -- Tests CMP, Bcond, Jcond, PC-relative offsets, absolute jumps
+    -----------------------------------------------------------------
+
+    -- 0: MOVI #5 -> R1
+    0 : D105;
+
+    -- 1: MOVI #5 -> R2
+    1 : D205;
+
+    -- 2: CMP R2, R1     ; compare R1 and R2 → Z=1
+    -- opcode 0000, Rdest=R1=0001, subfunc=CMP=1010, Rsrc=R2=0010
+    2 : 01A2;
+
+    -- 3: BEQ (cond=0000) + offset = +2 → jump to addr 6
+    -- Bcond opcode hi = 1000 (for Bcond)
+    -- cond=0000 (EQ)
+    -- imm8 = 02
+    3 : 8002;
+
+    -- 4: MOVI #9 -> R3   ; should be skipped by BEQ
+    4 : D309;
+
+    -- 5: MOVI #3 -> R4   ; should be skipped
+    5 : D403;
+
+    -----------------------------------------------------------
+    -- Jump target (should land here: PC=6)
+    -----------------------------------------------------------
+
+    -- 6: MOVI #3 -> R1
+    6 : D103;
+
+    -- 7: MOVI #8 -> R2
+    7 : D208;
+
+    -- 8: CMP R2, R1    ; R1=3, R2=8 → unsigned less? yes → L=1
+    8 : 01A2;
+
+    -- 9: BLTU (HI) cond=0100 offset = +2 → jump to addr 12 
+    -- cond=0100 = HI (unsigned greater)
+    -- But here we want R1 < R2 → so BLTU (LO) cond=1010? 
+    -- The table: LO = 1010 (L=0 and Z=0 means Rdest < Rsrc? For CR16 LO means lower)
+    -- Here R1 < R2, so we want to branch → LO condition = 1010
+    9 : 8A02;
+
+    -- 10: MOVI #9 -> R5  ; should be skipped
+    10 : D509;
+
+    -- 11: MOVI #9 -> R6  ; should be skipped
+    11 : D609;
+
+    -----------------------------------------------------------
+    -- Jump target 2 (addr=12)
+    -----------------------------------------------------------
+
+    -- 12: MOVI #15 -> R3
+    12 : D30F;
+
+    -- 13: JMP R3 (absolute jump)
+    -- opcode hi = 1001  (Jcond or JMP), cond=1110 = UC (unconditional)
+    -- format: 1001 cond4 Rsrc4  Rdest4
+    -- Use R3 as jump target register
+    13 : 9E30;
+
+    -- 14: MOVI #9 -> R7  ; should be skipped
+    14 : D709;
+
+    -----------------------------------------------------------
+    -- absolute jump target
+    -----------------------------------------------------------
+
+    -- Suppose R3=15 → jump here:
+    15 : D80A;     -- MOVI #10 → R8 (final success marker)
+
+    -----------------------------------------------------------------
+    [16..511] : 0000;
+
+END;
